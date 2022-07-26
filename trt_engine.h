@@ -3,6 +3,7 @@
 #include "common.h"
 #include "tensor.h"
 #include "trt_plugin.h"
+#include "trt_utils.h"
 #include <cuda_runtime.h>
 #include <unordered_map>
 #include <vector>
@@ -16,6 +17,7 @@ public:
   bool Init();
   bool Load(const std::string &engine_file);
   bool Save(const std::string &model_file, const std::string &engine_file);
+  void PrepareForRun();
   void Run();
   nvinfer1::INetworkDefinition *network() { return network_.get(); }
   nvinfer1::ICudaEngine *engine() { return engine_.get(); }
@@ -45,7 +47,7 @@ private:
 
   std::unordered_map<std::string, Tensor> output_;
 
-  std::vector<void *> bindings_;
+  std::unique_ptr<Bindings> binding_buffers_;
   // std::vector<void*> buffers_;
 
   bool use_profiler_;
