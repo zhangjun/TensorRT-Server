@@ -1,12 +1,13 @@
-#include "NvInferPlugin.h"
-#include "NvOnnxParser.h"
+#include "trt_engine.h"
+
 #include <cassert>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "trt_engine.h"
+#include "NvInferPlugin.h"
+#include "NvOnnxParser.h"
 
 using namespace nvonnxparser;
 using namespace nvinfer1;
@@ -31,11 +32,11 @@ bool TRTEngine::Init() {
   cudaStreamCreate(&stream_);
 }
 
-bool TRTEngine::Save(const std::string &model_file,
-                     const std::string &engine_file) {
-
+bool TRTEngine::Save(const std::string& model_file,
+                     const std::string& engine_file) {
   // builder_config_->setMaxWorkspaceSize(max_workspace_size_); TRT_DEPRECATED
-  builder_config_->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, max_workspace_size_);
+  builder_config_->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE,
+                                      max_workspace_size_);
 
   builder_->setMaxBatchSize(max_batch_size_);
   // builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
@@ -66,7 +67,7 @@ bool TRTEngine::Save(const std::string &model_file,
   }
   const std::string trt_network_name = "trt_engine";
   network()->setName(trt_network_name.c_str());
-  
+
   bool hasDynamicShapes{false};
   IOptimizationProfile* profile{nullptr};
   profile = builder_->createOptimizationProfile();
@@ -75,24 +76,27 @@ bool TRTEngine::Save(const std::string &model_file,
   for (int32_t i = 0; i < network()->getNbInputs(); ++i) {
     auto* input = network()->getInput(i);
     switch (input->getType()) {
-      case DataType::kINT32:
-      case DataType::kBOOL:
-      case DataType::kHALF:
+      case nvinfer1::DataType::kINT32:
+      case nvinfer1::DataType::kBOOL:
+      case nvinfer1::DataType::kHALF:
         // Leave these as is.
         break;
-      case DataType::kFLOAT:
-      case DataType::kINT8:
+      case nvinfer1::DataType::kFLOAT:
+      case nvinfer1::DataType::kINT8:
         // User did not specify a floating-point format.  Default to kFLOAT.
-        input->setType(DataType::kFLOAT);
+        input->setType(nvinfer1::DataType::kFLOAT);
         break;
     }
     input->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    
-    if (profile){
+
+    if (profile) {
       auto const dims = input->getDimensions();
       auto const isScalar = dims.nbDims == 0;
-      auto const isDynamicInput = std::any_of(dims.d, dims.d + dims.nbDims, [](int32_t dim) { return dim == -1; })
-          || input->isShapeTensor();
+      auto const isDynamicInput =
+          std::any_of(dims.d,
+                      dims.d + dims.nbDims,
+                      [](int32_t dim) { return dim == -1; }) ||
+          input->isShapeTensor();
       if (isDynamicInput) {
         hasDynamicShapes = true;
         ShapeRange shapes{};
@@ -109,39 +113,57 @@ bool TRTEngine::Save(const std::string &model_file,
           }
         } else {
           staticDims.resize(dims.nbDims);
-          std::transform(dims.d, dims.d + dims.nbDims, staticDims.begin(),
-                  [&](int dimension) { return dimension > 0 ? dimension : DEFAULT_DIMENSION; });
+          std::transform(dims.d,
+                         dims.d + dims.nbDims,
+                         staticDims.begin(),
+                         [&](int dimension) {
+                           return dimension > 0 ? dimension : DEFAULT_DIMENSION;
+                         });
         }
-        std::cout << "Dynamic dimensions required for input: " << input->getName()
-                              << ", but no shapes were provided. Automatically overriding shape to: "
-                              << std::endl;
+        std::cout << "Dynamic dimensions required for input: "
+                  << input->getName()
+                  << ", but no shapes were provided. Automatically overriding "
+                     "shape to: "
+                  << std::endl;
         std::fill(shapes.begin(), shapes.end(), staticDims);
 
         std::vector<int> profileDims{};
         if (input->isShapeTensor()) {
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kMIN)];
-          profile->setShapeValues(input->getName(), OptProfileSelector::kMIN,
-                    profileDims.data(), static_cast<int>(profileDims.size()));
+          profile->setShapeValues(input->getName(),
+                                  OptProfileSelector::kMIN,
+                                  profileDims.data(),
+                                  static_cast<int>(profileDims.size()));
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kOPT)];
-          profile->setShapeValues(input->getName(), OptProfileSelector::kOPT,
-                    profileDims.data(), static_cast<int>(profileDims.size()));
+          profile->setShapeValues(input->getName(),
+                                  OptProfileSelector::kOPT,
+                                  profileDims.data(),
+                                  static_cast<int>(profileDims.size()));
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kMAX)];
-          profile->setShapeValues(input->getName(), OptProfileSelector::kMAX,
-                    profileDims.data(), static_cast<int>(profileDims.size()));
+          profile->setShapeValues(input->getName(),
+                                  OptProfileSelector::kMAX,
+                                  profileDims.data(),
+                                  static_cast<int>(profileDims.size()));
         } else {
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kMIN)];
-          profile->setDimensions(input->getName(), OptProfileSelector::kMIN, toDims(profileDims));
+          profile->setDimensions(
+              input->getName(), OptProfileSelector::kMIN, toDims(profileDims));
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kOPT)];
-          profile->setDimensions(input->getName(), OptProfileSelector::kOPT, toDims(profileDims));
+          profile->setDimensions(
+              input->getName(), OptProfileSelector::kOPT, toDims(profileDims));
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kMAX)];
-          profile->setDimensions(input->getName(), OptProfileSelector::kMAX, toDims(profileDims));
+          profile->setDimensions(
+              input->getName(), OptProfileSelector::kMAX, toDims(profileDims));
         }
       }
     }
   }
   if (profile && hasDynamicShapes) {
-    if (profile->isValid() && builder_config_->addOptimizationProfile(profile) != -1) {
-      std::cerr << "optimization profile is invalid, or have Error in add optimization profile." << std::endl;
+    if (profile->isValid() &&
+        builder_config_->addOptimizationProfile(profile) != -1) {
+      std::cerr << "optimization profile is invalid, or have Error in add "
+                   "optimization profile."
+                << std::endl;
     }
   }
 
@@ -152,7 +174,7 @@ bool TRTEngine::Save(const std::string &model_file,
   }
   builder_config_->setFlag(BuilderFlag::kDISABLE_TIMING_CACHE);
   builder_config_->setFlag(BuilderFlag::kREFIT);
-  
+
   SparsityFlag sparsity{SparsityFlag::kDISABLE};
   // builder_config_->setFlag(BuilderFlag::kSPARSE_WEIGHTS);
 
@@ -169,14 +191,21 @@ bool TRTEngine::Save(const std::string &model_file,
         ShapeRange shapesCalib{};
         shapesCalib = shape->second;
 
-        profileDims = toDims(shapesCalib[static_cast<size_t>(OptProfileSelector::kOPT)]);
+        profileDims =
+            toDims(shapesCalib[static_cast<size_t>(OptProfileSelector::kOPT)]);
         // Here we check only kMIN as all profileDims are the same.
-        profileCalib->setDimensions(input->getName(), OptProfileSelector::kMIN, profileDims);
-        profileCalib->setDimensions(input->getName(), OptProfileSelector::kOPT, profileDims);
-        profileCalib->setDimensions(input->getName(), OptProfileSelector::kMAX, profileDims);
+        profileCalib->setDimensions(
+            input->getName(), OptProfileSelector::kMIN, profileDims);
+        profileCalib->setDimensions(
+            input->getName(), OptProfileSelector::kOPT, profileDims);
+        profileCalib->setDimensions(
+            input->getName(), OptProfileSelector::kMAX, profileDims);
       }
-      if (profileCalib->isValid() && builder_config_->setCalibrationProfile(profileCalib) != -1) {
-        std::cerr << "Calibration profile is invalid, or have Error in add calibration profile." << std::endl;
+      if (profileCalib->isValid() &&
+          builder_config_->setCalibrationProfile(profileCalib) != -1) {
+        std::cerr << "Calibration profile is invalid, or have Error in add "
+                     "calibration profile."
+                  << std::endl;
       }
     }
 
@@ -184,18 +213,21 @@ bool TRTEngine::Save(const std::string &model_file,
     for (int i = 0; i < network()->getNbInputs(); i++) {
       auto* input = network()->getInput(i);
       auto const dims = input->getDimensions();
-      auto const isDynamicInput
-          = std::any_of(dims.d, dims.d + dims.nbDims, [](int32_t dim) { return dim == -1; });
+      auto const isDynamicInput = std::any_of(
+          dims.d, dims.d + dims.nbDims, [](int32_t dim) { return dim == -1; });
       if (profileCalib) {
-        elemCount.push_back(volume(profileCalib->getDimensions(input->getName(), OptProfileSelector::kOPT)));
+        elemCount.push_back(volume(profileCalib->getDimensions(
+            input->getName(), OptProfileSelector::kOPT)));
       } else if (profile && isDynamicInput) {
-        elemCount.push_back(volume(profile->getDimensions(input->getName(), OptProfileSelector::kOPT)));
+        elemCount.push_back(volume(profile->getDimensions(
+            input->getName(), OptProfileSelector::kOPT)));
       } else {
         elemCount.push_back(volume(input->getDimensions()));
       }
     }
 
-    // builder_config_->setInt8Calibrator(new RndInt8Calibrator(1, elemCount, build.calibration, network, err));
+    // builder_config_->setInt8Calibrator(new RndInt8Calibrator(1, elemCount,
+    // build.calibration, network, err));
   }
 
   serialized_engine_.reset(
@@ -224,7 +256,7 @@ bool TRTEngine::Save(const std::string &model_file,
   }
 }
 
-bool TRTEngine::Load(const std::string &engine_file) {
+bool TRTEngine::Load(const std::string& engine_file) {
   std::ifstream input(engine_file, std::ios::binary);
   if (!input) {
     std::cout << "Error opening engine file: " << engine_file << std::endl;
@@ -256,25 +288,35 @@ bool TRTEngine::Load(const std::string &engine_file) {
 
 void TRTEngine::PrepareForRun() {
   auto num_binds = engine_->getNbBindings();
-  for(auto i = 0; i < num_binds; ++ i) {
+  for (auto i = 0; i < num_binds; ++i) {
     auto dims = engine_->getBindingDimensions(i);
-    std::string bind_name = std::string(engine() -> getBindingName(i));
+    std::string bind_name = std::string(engine()->getBindingName(i));
     auto dtype = engine_->getBindingDataType(i);
-    context() -> setBindingDimensions(i, dims);
+    context()->setBindingDimensions(i, dims);
 
     bool is_input = engine()->bindingIsInput(i);
     binding_buffers_->AddBinding(i, bind_name, is_input, 0, dtype);
   }
 }
 
-void TRTEngine::Run() {
+void TRTEngine::Run(const std::vector<Tensor>& input,
+                    std::vector<Tensor>& output) {
   // bindings_.resize(engine_->getNbBindings());
-  std::vector<void *> buffers(engine_->getNbBindings());
+  std::vector<void*> buffers(engine_->getNbBindings());
   // const ICudaEngine &engine = context.getEngine();
+
+  auto input_binds = binding_buffers_->GetInputBindings();
+  for (auto bind_item : input_binds) {
+    const int bind_idx = bind_item.second;
+    // buffers[bind_idx] =
+    nvinfer1::Dims dims;
+    binding_buffers_->get_binds()[bind_idx].buffer->resize(dims);
+    context()->setBindingDimensions(bind_idx, dims);
+  }
   cudaStreamSynchronize(stream_);
   context()->enqueueV2(buffers.data(), stream_, nullptr);
   cudaStreamSynchronize(stream_);
-  
+
   if (use_profiler_) {
     profiler.printLayerTimes();
   }

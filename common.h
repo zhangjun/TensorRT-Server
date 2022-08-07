@@ -143,3 +143,17 @@ private:
       record->second += ms;
   }
 };
+
+// #include <nvtx3/nvToolsExt.h>
+// // Updates a server stat with duration measured by a C++ scope.
+// class NvtxRange {
+//  public:
+//   explicit NvtxRange(const char* label) { nvtxRangePushA(label); }
+
+//   explicit NvtxRange(const std::string& label) : NvtxRange(label.c_str()) {}
+
+//   ~NvtxRange() { nvtxRangePop(); }
+// };
+// #define NVTX_INITIALIZE nvtxInitialize(nullptr)
+// #define NVTX_RANGE(V, L) triton::common::NvtxRange V(L)
+// #define NVTX_MARKER(L) nvtxMarkA(L)

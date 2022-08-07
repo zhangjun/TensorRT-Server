@@ -18,7 +18,7 @@ public:
   bool Load(const std::string &engine_file);
   bool Save(const std::string &model_file, const std::string &engine_file);
   void PrepareForRun();
-  void Run();
+  void Run(const std::vector<Tensor> &input, std::vector<Tensor> &output);
   nvinfer1::INetworkDefinition *network() { return network_.get(); }
   nvinfer1::ICudaEngine *engine() { return engine_.get(); }
   nvinfer1::IExecutionContext *context() {

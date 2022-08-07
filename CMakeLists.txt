@@ -35,4 +35,4 @@ add_library(trt_engine trt_engine.cc)
 option(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
 
 enable_testing()
-add_subdirectory(test)
+# add_subdirectory(test)

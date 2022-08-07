@@ -189,6 +189,23 @@ public:
     }
 };
 
+class PinnedAllocator
+{
+public:
+    bool operator()(void** ptr, size_t size) const
+    {
+        return cudaMallocHost(ptr, size) == cudaSuccess;
+    }
+};
+
+class PinnedFree
+{
+public:
+    void operator()(void* ptr) const
+    {
+        cudaFreeHost(ptr);
+    }
+};
 class HostAllocator
 {
 public:
@@ -209,6 +226,7 @@ public:
 };
 
 using DeviceBuffer = GenericBuffer<DeviceAllocator, DeviceFree>;
+using PinnedBuffer = GenericBuffer<PinnedAllocator, PinnedFree>;
 using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 
 struct Binding {
@@ -216,6 +234,7 @@ struct Binding {
   int64_t volume{0};
   nvinfer1::DataType data_type{nvinfer1::DataType::kFLOAT};
   std::unique_ptr<DeviceBuffer> buffer;
+  std::unique_ptr<HostBuffer> host_buffer;
   std::string name;
 };
 
@@ -277,6 +296,10 @@ class Bindings {
     //   }
     // }
     // return bindings;
+  }
+
+  const std::vector<Binding>& get_binds() {
+      return bindings_;
   }
 
  private:
