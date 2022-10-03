@@ -32,6 +32,10 @@ add_library(trt_engine trt_engine.cc)
 # set_target_properties(trt_engine PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Ofast -Wfatal-errors -D_MWAITXINTRIN_H_INCLUDED")
 # set(CUDA_NVCC_PLAGS ${CUDA_NVCC_PLAGS};-std=c++11;-g;-G;-gencode;arch=compute_75;code=sm_75)
+add_executable(main main.cc)
+target_link_libraries(main trt_engine ${CUDA_LIBRARIES} nvinfer_plugin nvonnxparser nvinfer)
+# target_link_libraries(main trt_engine nvinfer cudart)
+
 option(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
 
 enable_testing()

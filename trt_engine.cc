@@ -13,6 +13,7 @@ using namespace nvonnxparser;
 using namespace nvinfer1;
 
 static Profiler profiler;
+Logger gLogger(Severity::kINFO);
 
 bool TRTEngine::Init() {
   initLibNvInferPlugins(&gLogger, "");
@@ -292,7 +293,6 @@ void TRTEngine::PrepareForRun() {
     auto dims = engine_->getBindingDimensions(i);
     std::string bind_name = std::string(engine()->getBindingName(i));
     auto dtype = engine_->getBindingDataType(i);
-    context()->setBindingDimensions(i, dims);
 
     bool is_input = engine()->bindingIsInput(i);
     binding_buffers_->AddBinding(i, bind_name, is_input, 0, dtype);
@@ -302,20 +302,55 @@ void TRTEngine::PrepareForRun() {
 void TRTEngine::Run(const std::vector<Tensor>& input,
                     std::vector<Tensor>& output) {
   // bindings_.resize(engine_->getNbBindings());
-  std::vector<void*> buffers(engine_->getNbBindings());
+  std::vector<void*> buffers(engine_->getNbBindings(), nullptr);
   // const ICudaEngine &engine = context.getEngine();
 
   auto input_binds = binding_buffers_->GetInputBindings();
+  size_t idx = 0;
   for (auto bind_item : input_binds) {
     const int bind_idx = bind_item.second;
-    // buffers[bind_idx] =
-    nvinfer1::Dims dims;
-    binding_buffers_->get_binds()[bind_idx].buffer->resize(dims);
-    context()->setBindingDimensions(bind_idx, dims);
+
+    context()->setBindingDimensions(bind_idx, vec2dims(input[idx].shape()));
+    buffers[bind_idx] = binding_buffers_->get_binds()[bind_idx].buffer->data();
+    int64_t size = volume(input[idx].shape());
+    binding_buffers_->get_binds()[bind_idx].buffer->resize(size);
+    cudaMemcpyAsync(binding_buffers_->get_binds()[bind_idx].buffer->data(),
+                    input[idx].data(),
+                    size * getElementSize(input[idx].type()),
+                    cudaMemcpyHostToDevice,
+                    stream_);
+    context()->setBindingDimensions(bind_idx, vec2dims(input[idx].shape()));
+    idx++;
   }
-  cudaStreamSynchronize(stream_);
+
+  auto output_binds = binding_buffers_->GetOutputBindings();
+  idx = 0;
+  for (auto bind_item : output_binds) {
+    const int bind_idx = bind_item.second;
+    buffers[bind_idx] = binding_buffers_->get_binds()[bind_idx].buffer->data();
+    auto dims = engine()->getBindingDimensions(bind_idx);
+    int64_t size = volume(dims);
+    binding_buffers_->get_binds()[bind_idx].buffer->resize(size);
+    context()->setBindingDimensions(bind_idx, vec2dims(input[idx].shape()));
+    idx++;
+  }
+
   context()->enqueueV2(buffers.data(), stream_, nullptr);
   cudaStreamSynchronize(stream_);
+
+  idx = 0;
+  for (auto bind_item : output_binds) {
+    const int bind_idx = bind_item.second;
+    auto dims = engine()->getBindingDimensions(bind_idx);
+    output[idx].Reshape(dims2vec(dims));
+    int64_t size = volume(dims);
+    cudaMemcpyAsync(output[idx].data(),
+                    binding_buffers_->get_binds()[bind_idx].buffer->data(),
+                    size * getElementSize(output[idx].type()),
+                    cudaMemcpyHostToDevice,
+                    stream_);
+    idx++;
+  }
 
   if (use_profiler_) {
     profiler.printLayerTimes();

@@ -1,18 +1,21 @@
 #pragma once
+#include <cuda_runtime.h>
+
+#include <unordered_map>
+#include <vector>
+
 #include "NvInfer.h"
 #include "common.h"
 #include "tensor.h"
 #include "trt_plugin.h"
 #include "trt_utils.h"
-#include <cuda_runtime.h>
-#include <unordered_map>
-#include <vector>
 
 class TRTEngine {
-public:
+ public:
   TRTEngine(size_t max_batch_size, size_t max_workspace_size)
       : max_batch_size_(max_batch_size),
-        max_workspace_size_(max_workspace_size), use_profiler_(false) {}
+        max_workspace_size_(max_workspace_size),
+        use_profiler_(false) {}
   ~TRTEngine() { cudaStreamDestroy(stream_); }
   bool Init();
   bool Load(const std::string &engine_file);
@@ -34,7 +37,7 @@ public:
     return network()->addPluginV2(inputs, num_inputs, *plugin);
   }
 
-private:
+ private:
   size_t max_workspace_size_;
   size_t max_batch_size_;
   cudaStream_t stream_{NULL};
