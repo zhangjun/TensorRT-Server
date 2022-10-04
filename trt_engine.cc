@@ -33,6 +33,7 @@ bool TRTEngine::Init() {
   network_.reset(builder_->createNetworkV2(flags));
   cudaStreamCreate(&stream_);
   // std::cout << "init fisnish." << std::endl;
+  return true;
 }
 
 bool TRTEngine::Save(const std::string& model_file,
@@ -272,6 +273,7 @@ bool TRTEngine::Save(const std::string& model_file,
     std::cout << "Failed to build TensorRT engine." << std::endl;
     return false;
   }
+  return true;
 }
 
 bool TRTEngine::Load(const std::string& engine_file) {
