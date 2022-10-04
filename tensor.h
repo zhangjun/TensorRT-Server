@@ -61,10 +61,29 @@ inline int64_t getElementSize(DataType t) noexcept {
   }
 }
 
+namespace nvinfer1
+{
+  enum class DataType;
+}
+
+inline DataType GetDataType(const nvinfer1::DataType& dtype) {
+  if (dtype == nvinfer1::DataType::kFLOAT) {
+    return DataType::FLOAT;
+  } else if (dtype == nvinfer1::DataType::kHALF) {
+    return DataType::HALF;
+  } else if (dtype == nvinfer1::DataType::kINT8) {
+    return DataType::INT8;
+  } else if (dtype == nvinfer1::DataType::kINT32) {
+    return DataType::INT32;
+  }
+  // kBOOL
+  return DataType::BOOL;
+}
 class Tensor {
  public:
-  void Reshape(const std::vector<int>& data_shape) {
+  void Reshape(const std::vector<int>& data_shape, DataType data_type) {
     dims_.assign(data_shape.begin(), data_shape.end());
+    data_type_ = data_type;
     size_t size = 0;
     for (auto dim : data_shape) {
       size *= dim;
@@ -114,11 +133,11 @@ class Tensor {
     }
   }
 
- private:
-  Tensor(const Tensor& tensor) = delete;
-  Tensor(const Tensor&& tensor) = delete;
-  Tensor& operator=(const Tensor&) = delete;
-  Tensor& operator=(const Tensor&&) = delete;
+//  private:
+//   Tensor(const Tensor& tensor) = delete;
+//   Tensor(const Tensor&& tensor) = delete;
+//   Tensor& operator=(const Tensor&) = delete;
+//   Tensor& operator=(const Tensor&&) = delete;
 
  protected:
   void* data_{nullptr};

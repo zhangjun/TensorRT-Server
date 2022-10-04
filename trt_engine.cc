@@ -309,6 +309,7 @@ bool TRTEngine::Load(const std::string& engine_file) {
 
 void TRTEngine::PrepareForRun() {
   auto num_binds = engine_->getNbBindings();
+  std::cout << "num_binds: " << num_binds << std::endl;
   for (auto i = 0; i < num_binds; ++i) {
     auto dims = engine_->getBindingDimensions(i);
     std::string bind_name = std::string(engine()->getBindingName(i));
@@ -324,7 +325,6 @@ void TRTEngine::Run(const std::vector<Tensor>& input,
   // bindings_.resize(engine_->getNbBindings());
   std::vector<void*> buffers(engine_->getNbBindings(), nullptr);
   // const ICudaEngine &engine = context.getEngine();
-
   auto input_binds = binding_buffers_->GetInputBindings();
   size_t idx = 0;
   for (auto bind_item : input_binds) {
@@ -342,6 +342,7 @@ void TRTEngine::Run(const std::vector<Tensor>& input,
     context()->setBindingDimensions(bind_idx, vec2dims(input[idx].shape()));
     idx++;
   }
+  std::cout << "start run." << std::endl;
 
   auto output_binds = binding_buffers_->GetOutputBindings();
   idx = 0;
@@ -362,7 +363,7 @@ void TRTEngine::Run(const std::vector<Tensor>& input,
   for (auto bind_item : output_binds) {
     const int bind_idx = bind_item.second;
     auto dims = engine()->getBindingDimensions(bind_idx);
-    output[idx].Reshape(dims2vec(dims));
+    output[idx].Reshape(dims2vec(dims), GetDataType(engine_->getBindingDataType(bind_idx)));
     int64_t size = volume(dims);
     cudaMemcpyAsync(output[idx].data(),
                     binding_buffers_->get_binds()[bind_idx].buffer->data(),

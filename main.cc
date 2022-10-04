@@ -9,6 +9,11 @@ int main() {
   engine->Init();
   engine->Save("model.onnx", "trt.engine");
 
+  std::vector<Tensor> Input(1), Output(1);
+  Input[0].Reshape({1, 3, 224, 224}, DataType::FLOAT);
+  // engine->PrepareForRun();
+  // engine->Run(Input, Output);
+
   delete engine;
   return 0;
 }
