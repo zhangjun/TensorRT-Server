@@ -8,4 +8,6 @@ int main() {
   TRTEngine *engine = new TRTEngine(batch_size, workspace_size);
   engine->Init();
   engine->Save("model.onnx", "trt.engine");
+  delete engine;
+  return 0;
 }

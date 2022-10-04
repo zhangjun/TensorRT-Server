@@ -30,7 +30,7 @@ class Logger : public nvinfer1::ILogger {
  private:
   void log(Severity severity, const char *msg) noexcept override {
     if (severity > severity_) return;
-    printf("%s %s", severityPrefix(severity), msg);
+    printf("%s %s.\n", severityPrefix(severity), msg);
   }
   static const char *severityPrefix(Severity severity) {
     switch (severity) {

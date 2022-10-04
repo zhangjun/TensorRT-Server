@@ -19,6 +19,7 @@ bool TRTEngine::Init() {
   initLibNvInferPlugins(&gLogger, "");
   // profile_ = runtime_->GetBuilder()->createOptimizationProfile();
   builder_.reset(createInferBuilder(gLogger.getTRTLogger()));
+
   builder_config_.reset(builder_->createBuilderConfig());
 
   //   uint32_t flags = 1U << static_cast<int>(
@@ -26,11 +27,12 @@ bool TRTEngine::Init() {
   nvinfer1::NetworkDefinitionCreationFlags flags =
       (1U << static_cast<int>(
            nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH));
+
   // flags |= (1U << static_cast<int>(
   //               nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_PRECISION));
   network_.reset(builder_->createNetworkV2(flags));
-
   cudaStreamCreate(&stream_);
+  // std::cout << "init fisnish." << std::endl;
 }
 
 bool TRTEngine::Save(const std::string& model_file,
@@ -52,7 +54,7 @@ bool TRTEngine::Save(const std::string& model_file,
   if (fp16) {
     builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
   }
-  if (int8) {
+  if (false && int8) {
     builder_config_->setFlag(nvinfer1::BuilderFlag::kFP16);
     builder_config_->setFlag(nvinfer1::BuilderFlag::kINT8);
   }
@@ -121,11 +123,18 @@ bool TRTEngine::Save(const std::string& model_file,
                            return dimension > 0 ? dimension : DEFAULT_DIMENSION;
                          });
         }
+        auto vec2str = [](const std::vector<int> data) {
+          std::string res;
+          for (auto& item : data) {
+            res += std::to_string(item) + " ";
+          }
+          return res;
+        };
         std::cout << "Dynamic dimensions required for input: "
                   << input->getName()
                   << ", but no shapes were provided. Automatically overriding "
                      "shape to: "
-                  << std::endl;
+                  << vec2str(staticDims) << std::endl;
         std::fill(shapes.begin(), shapes.end(), staticDims);
 
         std::vector<int> profileDims{};
@@ -147,12 +156,15 @@ bool TRTEngine::Save(const std::string& model_file,
                                   static_cast<int>(profileDims.size()));
         } else {
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kMIN)];
+          std::cout << "min: " << vec2str(profileDims) << std::endl;
           profile->setDimensions(
               input->getName(), OptProfileSelector::kMIN, toDims(profileDims));
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kOPT)];
+          std::cout << "opt: " << vec2str(profileDims) << std::endl;
           profile->setDimensions(
               input->getName(), OptProfileSelector::kOPT, toDims(profileDims));
           profileDims = shapes[static_cast<size_t>(OptProfileSelector::kMAX)];
+          std::cout << "max: " << vec2str(profileDims) << std::endl;
           profile->setDimensions(
               input->getName(), OptProfileSelector::kMAX, toDims(profileDims));
         }
@@ -160,8 +172,8 @@ bool TRTEngine::Save(const std::string& model_file,
     }
   }
   if (profile && hasDynamicShapes) {
-    if (profile->isValid() &&
-        builder_config_->addOptimizationProfile(profile) != -1) {
+    if (!profile->isValid() ||
+        !(builder_config_->addOptimizationProfile(profile) != -1)) {
       std::cerr << "optimization profile is invalid, or have Error in add "
                    "optimization profile."
                 << std::endl;
@@ -173,8 +185,13 @@ bool TRTEngine::Save(const std::string& model_file,
     auto* output = network()->getOutput(i);
     output->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
   }
-  builder_config_->setFlag(BuilderFlag::kDISABLE_TIMING_CACHE);
-  builder_config_->setFlag(BuilderFlag::kREFIT);
+  // disable time cache
+  // builder_config_->setFlag(BuilderFlag::kDISABLE_TIMING_CACHE);
+
+  bool refittable = false;
+  if (refittable) {
+    builder_config_->setFlag(BuilderFlag::kREFIT);
+  }
 
   SparsityFlag sparsity{SparsityFlag::kDISABLE};
   // builder_config_->setFlag(BuilderFlag::kSPARSE_WEIGHTS);
@@ -261,6 +278,7 @@ bool TRTEngine::Load(const std::string& engine_file) {
   std::ifstream input(engine_file, std::ios::binary);
   if (!input) {
     std::cout << "Error opening engine file: " << engine_file << std::endl;
+    std::cout << "fff" << std::endl;
     return false;
   }
   input.seekg(0, input.end);
