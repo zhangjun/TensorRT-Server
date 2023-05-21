@@ -91,11 +91,11 @@ def infer():
 def main():
     builder = tensorrt.Builder(logger)
     network = builder.create_network(1 << int(tensorrt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
-    profile = builder.create_optimization_profile()
     config = builder.create_builder_config()
     config.set_memory_pool_limit(tensorrt.MemoryPoolType.WORKSPACE, 7 << 30)
 
     input = network.add_input(name='input', dtype = tensorrt.float32, shape=(1, 77, 1280))
+    profile = builder.create_optimization_profile()
     profile.set_shape(input.name, (1, 77, 1280), (1, 77, 1280), (1, 77, 1280))
     config.add_optimization_profile(profile)
 
